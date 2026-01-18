@@ -1,0 +1,47 @@
+/* App.css */
+
+/* 通常時は、印刷専用エリアを隠す */
+.print-only {
+  display: none;
+}
+
+/* 印刷時の設定 */
+@media print {
+  /* 印刷時は余計なUI（ヘッダー、ボタン、入力フォーム）を隠す */
+  .no-print {
+    display: none !important;
+  }
+
+  /* 印刷専用エリアを表示 */
+  .print-only {
+    display: block !important;
+  }
+
+  /* 背景色やグラフィックを強制的に印刷させる（ブラウザ設定への干渉） */
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    background-color: white;
+  }
+
+  /* 余白のリセット */
+  @page {
+    margin: 0;
+    size: A4;
+  }
+}
+
+@media screen {
+  .print-only {
+    display: none;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none;
+  }
+  .print-only {
+    display: block;
+  }
+}
