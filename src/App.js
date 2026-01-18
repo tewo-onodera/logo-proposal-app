@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Routes, Route, Link } from "react-router-dom";
 import "./App.css";
-// import { loadStripe } from "@stripe/stripe-js"; 
-// ※Stripeは必要に応じて有効化してください
 
 /* =========================================
    定数・テンプレート
@@ -25,6 +23,7 @@ const PLANS = {
     desc: "まずは使い勝手をお試し", 
     features: ["基本構成のプレビュー", "デモ版PDF出力(ロゴ固定)", "設定のブラウザ保存"], 
     isPopular: false,
+    rank: 0, // ★ランク付けを追加
     allowCustomHeader: false, allowDesignIntent: false, allowColorCustom: false 
   },
   pro: { 
@@ -34,8 +33,10 @@ const PLANS = {
     unit: "円/月(税込)", 
     desc: "フリーランスの受注率UPに", 
     features: ["商用PDF出力(ロゴ反映)", "デザイン意図の自動生成", "テーマカラー自由変更", "信頼度が高まるレイアウト"], 
-    isPopular: true, // ★おすすめフラグ
+    isPopular: true, 
     badge: "一番人気",
+    rank: 1, // ★ランク付けを追加
+    stripeUrl: "https://buy.stripe.com/test_dRmaEZ4261S78Ye8Tu8IU02", 
     allowCustomHeader: false, allowDesignIntent: true, allowColorCustom: true 
   },
   agency: { 
@@ -46,6 +47,8 @@ const PLANS = {
     desc: "制作チーム・代理店向け", 
     features: ["代理店名の記載", "プロジェクト管理ヘッダー", "高精細レイアウト保存", "チーム共有用設定"], 
     isPopular: false,
+    rank: 2, // ★ランク付けを追加
+    stripeUrl: "https://buy.stripe.com/test_4gMcN72Y2gN10rIb1C8IU03",
     allowCustomHeader: true, allowDesignIntent: true, allowColorCustom: true 
   },
 };
@@ -61,7 +64,7 @@ const SuccessPage = ({ onSuccess }) => {
       onSuccess(plan);
       localStorage.setItem("logo_proposal_plan", plan);
     }
-  }, []);
+  }, [onSuccess]);
 
   return (
     <div style={{ textAlign: "center", padding: "100px 20px", fontFamily: '"Inter", sans-serif' }}>
@@ -104,7 +107,6 @@ export default function App() {
     logoImage: null,
   });
 
-  // 自動保存ロジック
   useEffect(() => {
     const savedPlan = localStorage.getItem("logo_proposal_plan");
     if (savedPlan === "pro" || savedPlan === "agency") {
@@ -113,7 +115,6 @@ export default function App() {
     } else {
       setActivePlan("free");
       setSelectedPlan("free");
-      localStorage.removeItem("logo_proposal_plan");
     }
   }, []);
 
@@ -133,7 +134,6 @@ export default function App() {
   };
 
   const handleImageUpload = (e) => {
-    // 【重要】Freeプランお断りガード
     if (activePlan === "free") {
       alert("🔒 この機能はProプラン限定です。\n商用利用可能な提案書を作成するにはアップグレードしてください。");
       return;
@@ -146,6 +146,20 @@ export default function App() {
     }
   };
 
+  // ★印刷ガード機能：選択中のプランが契約プランより高い場合はブロックする
+  const handlePrint = () => {
+    const activeRank = PLANS[activePlan].rank;
+    const selectedRank = PLANS[selectedPlan].rank;
+
+    // 契約ランクより上のプランを表示中の場合
+    if (selectedRank > activeRank) {
+      alert(`🔒 選択中の「${PLANS[selectedPlan].name}」プランのデザインで出力するには、アップグレードが必要です。\n\n現在のプラン (${PLANS[activePlan].name}) のデザインに戻すか、プランを変更してください。`);
+      return;
+    }
+
+    window.print();
+  };
+
   const ProposalDocument = ({ mode, displayPlan, entitlementPlan }) => {
     const { agencyName, projectName, client, concept, price, color, logoImage } = formData;
     const currentPlan = PLANS[displayPlan];
@@ -153,7 +167,6 @@ export default function App() {
     const isPdf = mode === "pdf";
     const shouldShowLogo = isPdf || isPreview;
 
-    // ロジック：Free、またはProユーザーがAgencyプレビューを見ている場合はデモ
     const isDemoRequired = 
       entitlementPlan === "free" || 
       (entitlementPlan === "pro" && displayPlan === "agency");
@@ -163,7 +176,6 @@ export default function App() {
 
     return (
       <div style={{ color: "#1f2937", lineHeight: 1.7, fontFamily: '"Helvetica Neue", Arial, sans-serif' }}>
-        {/* ヘッダーエリア */}
         {displayPlan === "agency" ? (
           <div style={{ textAlign: "right", borderBottom: `2px solid ${displayColor}`, paddingBottom: 20, marginBottom: 40 }}>
             <p style={{ fontSize: 11, color: "#6b7280", margin: 0, textTransform: "uppercase", letterSpacing: 1 }}>Produced by</p>
@@ -177,12 +189,10 @@ export default function App() {
           </div>
         )}
 
-        {/* 宛名 */}
         <div style={{ marginBottom: 48 }}>
           <p style={{ fontSize: 22, fontWeight: "bold", fontFamily: "serif" }}>{client || "株式会社〇〇"} <span style={{fontSize:16}}>御中</span></p>
         </div>
 
-        {/* 警告メッセージ */}
         {displayPlan === "free" && mode === "preview" && (
           <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1e40af", padding: 12, borderRadius: 8, fontSize: 13, marginBottom: 24, display: "flex", alignItems: "center", gap: 8 }}>
             <span>ℹ️</span> <strong>プレビューモード:</strong> PDF出力時にはデモロゴが含まれます。Proプランで解除されます。
@@ -190,11 +200,10 @@ export default function App() {
         )}
         {entitlementPlan === "pro" && displayPlan === "agency" && mode === "preview" && (
           <div style={{ background: "#fffbeb", border: "1px solid #fde68a", color: "#92400e", padding: 12, borderRadius: 8, fontSize: 13, marginBottom: 24 }}>
-            ⚠️ Agencyプランのプレビュー中です（デモロゴ表示）
+            ⚠️ Agencyプランのプレビュー中です（契約外のデザインです）
           </div>
         )}
 
-        {/* ロゴ表示エリア */}
         <div style={{
             background: "#fff",
             borderRadius: 4,
@@ -208,7 +217,6 @@ export default function App() {
             position: "relative",
             overflow: "hidden"
           }}>
-          {/* 背景のグリッド装飾（プロっぽさ演出） */}
           <div style={{ position: "absolute", inset: 0, backgroundImage: "radial-gradient(#e5e7eb 1px, transparent 1px)", backgroundSize: "20px 20px", opacity: 0.5 }}></div>
           
           <div style={{ position: "relative", zIndex: 1, width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -220,7 +228,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* コンセプト */}
         <h2 style={{ fontSize: 16, fontWeight: "bold", borderLeft: `4px solid ${displayColor}`, paddingLeft: 16, marginBottom: 20, color: "#111827" }}>
           DESIGN CONCEPT
         </h2>
@@ -228,7 +235,6 @@ export default function App() {
           {concept || "ここに選択したコンセプトが表示されます。プロフェッショナルな文言でクライアントの信頼を獲得しましょう。"}
         </p>
 
-        {/* デザイン意図（Pro以上） */}
         {currentPlan.allowDesignIntent && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 48 }}>
             <div style={{ padding: 20, background: "#f8fafc", borderRadius: 12, border: "1px solid #e2e8f0" }}>
@@ -242,7 +248,6 @@ export default function App() {
           </div>
         )}
 
-        {/* 価格 */}
         <div style={{ marginTop: "auto", paddingTop: 30, borderTop: "2px solid #f3f4f6", display: "flex", justifyContent: "flex-end", alignItems: "baseline", gap: 16 }}>
           <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>制作費用（一式）</p>
           <p style={{ fontSize: 36, fontWeight: "800", margin: 0, fontFamily: "sans-serif", letterSpacing: -1 }}>
@@ -257,23 +262,18 @@ export default function App() {
   const MainContent = (
     <div style={{ background: "#f8fafc", minHeight: "100vh", fontFamily: '"Inter", sans-serif', color: "#0f172a" }}>
       
-      {/* ヒーローセクション：購買意欲を高めるコピーとデザイン */}
       <section className="no-print" style={{ 
         background: "linear-gradient(135deg, #eff6ff 0%, #fff 100%)", 
-        padding: "60px 20px", 
-        borderBottom: "1px solid #e2e8f0",
-        textAlign: "center"
+        padding: "60px 20px", borderBottom: "1px solid #e2e8f0", textAlign: "center"
       }}>
         <div style={{ maxWidth: 1000, margin: "0 auto" }}>
           <h1 style={{ fontSize: 36, fontWeight: 900, marginBottom: 16, letterSpacing: "-0.02em", color: "#1e293b" }}>
             選ばれる提案書を、<span style={{ color: "#3b82f6" }}>一瞬で。</span>
           </h1>
           <p style={{ color: "#64748b", fontSize: 16, marginBottom: 48, maxWidth: 600, margin: "0 auto 48px" }}>
-            デザインの価値を正しく伝え、クライアントの「Yes」を引き出す。<br/>
-            プロフェッショナルな提案書作成ツール。
+            デザインの価値を正しく伝え、クライアントの「Yes」を引き出す。
           </p>
 
-          {/* プラン選択カード */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 24, alignItems: "start" }}>
             {Object.keys(PLANS).map((key) => {
               const p = PLANS[key];
@@ -287,29 +287,18 @@ export default function App() {
                   onClick={() => {
                     if (isCurrent) { setSelectedPlan(key); return; }
                     setSelectedPlan(key);
-                    // ここに決済トリガーを入れる
                   }} 
                   style={{ 
-                    position: "relative",
-                    padding: 32, 
-                    borderRadius: 20, 
+                    position: "relative", padding: 32, borderRadius: 20, 
                     border: isActive ? `2px solid ${isPro ? "#3b82f6" : "#0f172a"}` : "1px solid #e2e8f0", 
                     background: isActive ? "#fff" : "rgba(255,255,255,0.6)", 
-                    cursor: "pointer", 
-                    textAlign: "left", 
-                    transition: "all 0.2s ease",
+                    cursor: "pointer", textAlign: "left", transition: "all 0.2s ease",
                     transform: isActive ? "translateY(-4px)" : "none",
                     boxShadow: isActive ? "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)" : "none"
                   }}
                 >
                   {p.isPopular && (
-                    <div style={{ 
-                      position: "absolute", top: -12, left: "50%", transform: "translateX(-50%)", 
-                      background: "#3b82f6", color: "#fff", padding: "4px 12px", borderRadius: 20, 
-                      fontSize: 12, fontWeight: "bold", boxShadow: "0 4px 6px rgba(59, 130, 246, 0.3)" 
-                    }}>
-                      {p.badge}
-                    </div>
+                    <div style={{ position: "absolute", top: -12, left: "50%", transform: "translateX(-50%)", background: "#3b82f6", color: "#fff", padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: "bold" }}>{p.badge}</div>
                   )}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                     <h3 style={{ margin: 0, fontSize: 18, fontWeight: "bold" }}>{p.name}</h3>
@@ -321,14 +310,24 @@ export default function App() {
                   </div>
                   <p style={{ fontSize: 13, color: "#64748b", marginBottom: 24, lineHeight: 1.5 }}>{p.desc}</p>
                   
-                  <button style={{
-                    width: "100%", padding: "10px", borderRadius: 8, border: "none", fontWeight: "bold", marginBottom: 24,
-                    background: isActive ? (isPro ? "#3b82f6" : "#1e293b") : "#e2e8f0",
-                    color: isActive ? "#fff" : "#64748b",
-                    cursor: "pointer"
-                  }}>
-                    {isActive ? (isCurrent ? "表示中" : "プランを選択") : "見る"}
-                  </button>
+                  <a 
+                    href={isCurrent ? "#" : (p.stripeUrl || "#")}
+                    onClick={(e) => {
+                      if (isCurrent || key === "free") {
+                        e.preventDefault();
+                        setSelectedPlan(key);
+                      }
+                    }}
+                    style={{
+                      display: "block", textAlign: "center", textDecoration: "none", width: "100%", padding: "10px", borderRadius: 8, border: "none", fontWeight: "bold", marginBottom: 24,
+                      background: isActive ? (isPro ? "#3b82f6" : "#1e293b") : "#e2e8f0",
+                      color: isActive ? "#fff" : "#64748b",
+                      cursor: isCurrent ? "default" : "pointer",
+                      boxSizing: "border-box"
+                    }}
+                  >
+                    {isActive ? (isCurrent ? "契約中" : "プランを購入する") : "見る"}
+                  </a>
 
                   <ul style={{ padding: 0, listStyle: "none", fontSize: 13, color: "#475569" }}>
                     {p.features.map(f => (
@@ -344,22 +343,14 @@ export default function App() {
         </div>
       </section>
 
-      {/* エディタエリア */}
       <div className="no-print" style={{ maxWidth: 1200, margin: "40px auto", padding: "0 20px", display: "grid", gridTemplateColumns: "380px 1fr", gap: 40, alignItems: "start" }}>
-        
-        {/* 左サイドバー：入力フォーム */}
         <aside>
           <div style={{ background: "#fff", padding: 24, borderRadius: 16, boxShadow: "0 4px 6px -1px rgba(0,0,0,0.05)", border: "1px solid #f1f5f9", position: "sticky", top: 20 }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 24, alignItems: "center" }}>
-              <h2 style={{ fontSize: 15, fontWeight: "bold", margin: 0, display: "flex", alignItems: "center", gap: 6 }}>
-                <span>📝</span> 構成内容
-              </h2>
-              <span style={{ fontSize: 11, color: isSaved ? "#10b981" : "#9ca3af", background: isSaved ? "#ecfdf5" : "#f3f4f6", padding: "2px 8px", borderRadius: 4 }}>
-                {isSaved ? "Saved" : "Saving..."}
-              </span>
+              <h2 style={{ fontSize: 15, fontWeight: "bold", margin: 0, display: "flex", alignItems: "center", gap: 6 }}><span>📝</span> 構成内容</h2>
+              <span style={{ fontSize: 11, color: isSaved ? "#10b981" : "#9ca3af", background: isSaved ? "#ecfdf5" : "#f3f4f6", padding: "2px 8px", borderRadius: 4 }}>{isSaved ? "Saved" : "Saving..."}</span>
             </div>
 
-            {/* Free/Pro切り替え時のUI制御 */}
             {selectedPlan === "agency" && (
               <div style={{ padding: 12, background: "#f8fafc", borderRadius: 8, marginBottom: 20, border: "1px dashed #cbd5e1" }}>
                 <label className="field-label">提出元 (代理店・会社名)</label>
@@ -385,11 +376,8 @@ export default function App() {
                 </div>
               </div>
             ) : (
-              // Freeプランの時のカラー選択（ロック状態）
               <div style={{ marginBottom: 20, opacity: 0.5, pointerEvents: "none" }}>
-                 <label className="field-label" style={{ display: "flex", justifyContent: "space-between" }}>
-                   テーマカラー <span>🔒 Pro</span>
-                 </label>
+                 <label className="field-label" style={{ display: "flex", justifyContent: "space-between" }}>テーマカラー <span>🔒 Pro</span></label>
                  <div style={{ width: 24, height: 24, borderRadius: "50%", background: "#ccc" }} />
               </div>
             )}
@@ -398,23 +386,11 @@ export default function App() {
             <input className="field-input" name="client" value={formData.client} onChange={handleChange} placeholder="株式会社サンプル 様" />
             
             <label className="field-label" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              ロゴ画像 
-              {activePlan === "free" && <span style={{fontSize: 10, color: "#ef4444", background: "#fef2f2", padding: "1px 6px", borderRadius: 4}}>🔒 Proで解禁</span>}
+              ロゴ画像 {activePlan === "free" && <span style={{fontSize: 10, color: "#ef4444", background: "#fef2f2", padding: "1px 6px", borderRadius: 4}}>🔒 Proで解禁</span>}
             </label>
             <div style={{ position: "relative" }}>
-              <input
-                type="file"
-                onChange={handleImageUpload}
-                disabled={activePlan === "free"}
-                style={{ 
-                  fontSize: 12, marginBottom: 20, width: "100%",
-                  opacity: activePlan === "free" ? 0.4 : 1,
-                  cursor: activePlan === "free" ? "not-allowed" : "pointer" 
-                }}
-              />
-              {activePlan === "free" && (
-                <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "30px", background: "transparent" }} onClick={() => alert("🔒 画像アップロードはProプラン以上の機能です。\n\n自社ロゴを反映させた美しい提案書を作成するには、Proプランをご利用ください。")}></div>
-              )}
+              <input type="file" onChange={handleImageUpload} disabled={activePlan === "free"} style={{ fontSize: 12, marginBottom: 20, width: "100%", opacity: activePlan === "free" ? 0.4 : 1, cursor: activePlan === "free" ? "not-allowed" : "pointer" }} />
+              {activePlan === "free" && <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "30px", background: "transparent" }} onClick={() => alert("🔒 画像アップロードはProプラン以上の機能です。")}></div>}
             </div>
 
             {(activePlan === "pro" || activePlan === "agency") ? (
@@ -432,9 +408,7 @@ export default function App() {
             ) : (
               <div style={{ marginBottom: 20 }}>
                  <label className="field-label">コンセプト</label>
-                 <div style={{ background: "#f3f4f6", padding: 10, borderRadius: 8, fontSize: 12, color: "#6b7280", textAlign: "center" }}>
-                   フリーテキスト入力のみ<br/>(AIテンプレートは 🔒 Pro)
-                 </div>
+                 <div style={{ background: "#f3f4f6", padding: 10, borderRadius: 8, fontSize: 12, color: "#6b7280", textAlign: "center" }}>フリーテキスト入力のみ<br/>(AIテンプレートは 🔒 Pro)</div>
                  <textarea className="field-input" style={{marginTop:8}} name="concept" value={formData.concept} onChange={handleChange} rows={3} />
               </div>
             )}
@@ -445,26 +419,20 @@ export default function App() {
               <input className="field-input" type="number" name="price" value={formData.price} onChange={handleChange} style={{ paddingLeft: 24 }} />
             </div>
 
-            <button onClick={() => window.print()} className="print-button">
+            {/* ★ここを handlePrint に変更してガードを追加 */}
+            <button onClick={handlePrint} className="print-button">
               PDFを出力する
             </button>
             {activePlan === "free" && <p style={{ fontSize: 10, color: "#94a3b8", marginTop: 8, textAlign: "center" }}>※Freeプランはデモロゴでの出力となります</p>}
           </div>
         </aside>
 
-        {/* メインプレビューエリア */}
         <main>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
              <h3 style={{ fontSize: 14, fontWeight: "bold", color: "#64748b", margin: 0 }}>プレビュー</h3>
              <div style={{ fontSize: 12, color: "#94a3b8" }}>A4 / 縦向き</div>
           </div>
-          <div style={{ 
-            background: "#fff", 
-            padding: "60px 80px", // 余白を広げて紙っぽさを出す 
-            boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.15)", // 浮遊感を強める
-            minHeight: 800,
-            borderRadius: 4 // 角を少しだけ丸く（紙っぽさ）
-          }}>
+          <div style={{ background: "#fff", padding: "60px 80px", boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.15)", minHeight: 800, borderRadius: 4 }}>
             <ProposalDocument
               mode="preview"
               displayPlan={selectedPlan}
@@ -475,9 +443,10 @@ export default function App() {
       </div>
 
       <div className="print-only">
+        {/* ★印刷時も選択中のプランレイアウトを使用する（ガード機能があるので安全） */}
         <ProposalDocument
           mode="pdf"
-          displayPlan={activePlan} 
+          displayPlan={selectedPlan} 
           entitlementPlan={activePlan}
         />
       </div>
@@ -493,7 +462,6 @@ export default function App() {
         }
         .print-button:hover { background: #1e293b; transform: translateY(-1px); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
         .print-button:active { transform: translateY(0); }
-        
         @media (max-width: 900px) { .no-print { grid-template-columns: 1fr !important; } }
       `}</style>
     </div>
